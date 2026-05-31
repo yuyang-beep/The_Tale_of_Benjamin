@@ -17,8 +17,11 @@ function showPanel(name) {
 }
 function me() { return state?.players?.find(p => p.id === myId); }
 function isBenjamin() { return me()?.isBenjamin === true; }
-function phaseLabel(phase) {
-  return { lobby:'大厅', free:'自由阶段', action:'行动阶段', guess:'猜测阶段', settlement:'结算', ended:'游戏结束' }[phase] ?? phase;
+function phaseLabel(phase, subPhase) {
+  const base = { lobby:'大厅', free:'自由阶段', action:'行动阶段', guess:'猜测阶段', settlement:'结算', ended:'游戏结束' }[phase] ?? phase;
+  if (phase === 'action' && subPhase === 'adjust') return '行动阶段 · 微调';
+  if (phase === 'action' && subPhase === 'invest') return '行动阶段 · 投入';
+  return base;
 }
 
 // ── Lobby ────────────────────────────────────────────────
@@ -71,7 +74,7 @@ function renderWaiting() {
 // ── Game Header ───────────────────────────────────────────
 function renderHeader() {
   $('hdr-round').textContent = `第 ${state.gameRound} 轮`;
-  $('hdr-phase').textContent = phaseLabel(state.phase);
+  $('hdr-phase').textContent = phaseLabel(state.phase, state.actionSubPhase);
   const id = $('hdr-identity');
   if (state.isBenjamin) {
     id.textContent = `你是本杰明（本轮执行第 ${state.benjaminRound} 轮）`;
@@ -95,118 +98,157 @@ $('btn-end-free').onclick = () => {
 // ── Action Phase ──────────────────────────────────────────
 function renderAction() {
   showPanel('action');
+  if (state.actionSubPhase === 'adjust') renderAdjust();
+  else renderInvest();
+}
+
+// Sub-phase 1: adjust previous round ±1
+function renderAdjust() {
+  const player = me();
+  if (!player) return;
+
+  if (player.hasAdjusted) {
+    $('coin-status').innerHTML = '';
+    $('action-controls').innerHTML = '';
+    $('action-wait').textContent = '已提交微调，等待其他玩家…';
+    show('action-wait');
+    return;
+  }
+  hide('action-wait');
+
+  const pool = player.pool;
+  const rem = pool?.remaining ?? { 10:2, 5:4, 1:10 };
+  const gr = state.gameRound;
+  const amBenjamin = isBenjamin();
+  const personalIdx = amBenjamin ? (5 - gr) : (gr - 1);
+  const prevIdx = amBenjamin ? personalIdx + 1 : personalIdx - 1;
+  const prevBrk = pool?.rounds?.[prevIdx] ?? { 10:0, 5:0, 1:0 };
+  const prevTotal = [10,5,1].reduce((s,d) => s + d*(prevBrk[d]??0), 0);
+  const MAXC = { 10:2, 5:4, 1:10 };
+
+  $('coin-status').innerHTML = `
+    <div class="coin-status">
+      <h4>当前剩余金币</h4>
+      <div class="coin-row">
+        <div class="coin-group"><label>未分配</label>
+          <span>10×${rem[10]}　5×${rem[5]}　1×${rem[1]}</span>
+        </div>
+        <div class="coin-group"><label>剩余总额</label>
+          <span style="color:var(--gold)">${pool?.remainingTotal ?? 0}</span>
+        </div>
+      </div>
+    </div>`;
+
+  let selectedAdj = { type: 'pass' };
+
+  $('action-controls').innerHTML = `
+    <p class="hint" style="font-weight:600;margin-bottom:.4rem">
+      ▸ 微调上轮投入 <span id="adj-label" style="color:var(--gold);font-weight:400">（不调整）</span>
+    </p>
+    <p class="hint" style="margin-bottom:.4rem;font-size:.85rem">
+      上轮投入：10×${prevBrk[10]??0}　5×${prevBrk[5]??0}　1×${prevBrk[1]??0}　共 ${prevTotal} 金币
+    </p>
+    <p class="hint" style="margin-bottom:.3rem;font-size:.85rem">增 / 减 一枚：</p>
+    <div class="denom-btns" id="adj-btns">
+      ${[10,5,1].map(d=>`<button class="denom-btn add" data-act="add" data-d="${d}"
+        ${rem[d]<=0||(prevBrk[d]??0)>=MAXC[d]?'disabled':''}>+${d}</button>`).join('')}
+      ${[10,5,1].map(d=>`<button class="denom-btn remove" data-act="remove" data-d="${d}"
+        ${(prevBrk[d]??0)<=0?'disabled':''}>-${d}</button>`).join('')}
+      <button class="denom-btn secondary" data-act="pass">不调整</button>
+    </div>
+    <div class="action-btns" style="margin-top:1rem">
+      <button id="btn-confirm-adjust">确认微调</button>
+    </div>`;
+
+  $('adj-btns').querySelectorAll('[data-act]').forEach(btn => {
+    btn.onclick = () => {
+      if (btn.disabled) return;
+      $('adj-btns').querySelectorAll('[data-act]').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      const act = btn.dataset.act;
+      const d = parseInt(btn.dataset.d);
+      selectedAdj = act === 'pass' ? { type: 'pass' } : { type: act, denom: d };
+      $('adj-label').textContent = act === 'pass' ? '（不调整）' : `（${act === 'add' ? '+' : '-'}${d} 金币）`;
+    };
+  });
+
+  $('btn-confirm-adjust').onclick = () => {
+    socket.emit('submit-adjust', selectedAdj, res => {
+      if (res?.error) alert(res.error);
+    });
+  };
+}
+
+// Sub-phase 2: allocate coins for current round
+function renderInvest() {
   const player = me();
   if (!player) return;
 
   if (player.hasActed) {
     $('coin-status').innerHTML = '';
     $('action-controls').innerHTML = '';
+    $('action-wait').textContent = '已提交投入，等待其他玩家…';
     show('action-wait');
     return;
   }
   hide('action-wait');
 
-  const pool = player.pool ?? { unused: {10:2,5:4,1:10}, invested: {10:0,5:0,1:0}, total: 0 };
+  const pool = player.pool;
+  const rem = pool?.remaining ?? { 10:2, 5:4, 1:10 };
+  const gr = state.gameRound;
+  const amBenjamin = isBenjamin();
+
+  // Show previous round's final breakdown as reference (rounds 2+)
+  let prevRef = '';
+  if (gr > 1) {
+    const personalIdx = amBenjamin ? (5 - gr) : (gr - 1);
+    const prevIdx = amBenjamin ? personalIdx + 1 : personalIdx - 1;
+    const prevBrk = pool?.rounds?.[prevIdx] ?? { 10:0, 5:0, 1:0 };
+    const prevTotal = [10,5,1].reduce((s,d) => s + d*(prevBrk[d]??0), 0);
+    prevRef = `<p class="hint" style="font-size:.85rem;margin-bottom:.6rem">
+      上轮最终投入：10×${prevBrk[10]??0}　5×${prevBrk[5]??0}　1×${prevBrk[1]??0}　共 ${prevTotal} 金币
+    </p>`;
+  }
+
+  const coinTitle = gr > 1 ? '可用金币（微调后）' : '可用金币';
   $('coin-status').innerHTML = `
     <div class="coin-status">
-      <h4>金币状态</h4>
+      <h4>${coinTitle}</h4>
       <div class="coin-row">
-        <div class="coin-group"><label>未投入</label>
-          <span>10×${pool.unused[10]}　5×${pool.unused[5]}　1×${pool.unused[1]}</span>
+        <div class="coin-group"><label>未分配</label>
+          <span>10×${rem[10]}　5×${rem[5]}　1×${rem[1]}</span>
         </div>
-        <div class="coin-group"><label>已投入</label>
-          <span>10×${pool.invested[10]}　5×${pool.invested[5]}　1×${pool.invested[1]}</span>
-        </div>
-        <div class="coin-group"><label>本轮总额</label>
-          <span style="color:var(--gold)">${pool.total}</span>
+        <div class="coin-group"><label>剩余总额</label>
+          <span style="color:var(--gold)">${pool?.remainingTotal ?? 0}</span>
         </div>
       </div>
     </div>`;
 
-  const ctrl = $('action-controls');
-  if (state.gameRound === 1) {
-    ctrl.innerHTML = `
-      <p class="hint">第1轮：自由决定投入金币</p>
-      <div class="initial-grid">
-        <div class="initial-cell"><label>10金币（共2枚）</label>
-          <input type="number" id="inp-d10" min="0" max="2" value="0"/></div>
-        <div class="initial-cell"><label>5金币（共4枚）</label>
-          <input type="number" id="inp-d5" min="0" max="4" value="0"/></div>
-        <div class="initial-cell"><label>1金币（共10枚）</label>
-          <input type="number" id="inp-d1" min="0" max="10" value="0"/></div>
-      </div>
-      <div class="action-btns"><button id="btn-confirm-initial">确认投入</button></div>`;
-    $('btn-confirm-initial').onclick = () => {
-      const investObj = {
-        10: parseInt($('inp-d10').value) || 0,
-        5:  parseInt($('inp-d5').value)  || 0,
-        1:  parseInt($('inp-d1').value)  || 0,
-      };
-      socket.emit('submit-action', { type: 'initial', investObj }, res => {
-        if (res?.error) alert(res.error);
-      });
+  $('action-controls').innerHTML = `
+    ${prevRef}
+    <p class="hint" style="font-weight:600;margin-bottom:.5rem">▸ 本轮投入金币</p>
+    <div class="initial-grid">
+      <div class="initial-cell"><label>10金币（最多 ${rem[10]} 枚）</label>
+        <input type="number" id="inp-d10" min="0" max="${rem[10]}" value="0"/></div>
+      <div class="initial-cell"><label>5金币（最多 ${rem[5]} 枚）</label>
+        <input type="number" id="inp-d5" min="0" max="${rem[5]}" value="0"/></div>
+      <div class="initial-cell"><label>1金币（最多 ${rem[1]} 枚）</label>
+        <input type="number" id="inp-d1" min="0" max="${rem[1]}" value="0"/></div>
+    </div>
+    <div class="action-btns" style="margin-top:1rem">
+      <button id="btn-confirm-invest">确认投入</button>
+    </div>`;
+
+  $('btn-confirm-invest').onclick = () => {
+    const investObj = {
+      10: parseInt($('inp-d10').value) || 0,
+      5:  parseInt($('inp-d5').value)  || 0,
+      1:  parseInt($('inp-d1').value)  || 0,
     };
-  } else {
-    // Build previous round breakdown info for display
-    const gr = state.gameRound;
-    const amBenjamin = isBenjamin();
-    const prevPersonalIdx = amBenjamin ? (6 - gr) : (gr - 2);
-    const prevBrk = me()?.roundCoinsBreakdown?.[prevPersonalIdx] ?? { 10: 0, 5: 0, 1: 0 };
-    const prevTotal = [10, 5, 1].reduce((s, d) => s + d * (prevBrk[d] ?? 0), 0);
-
-    let selectedPrevAdjust = { type: 'pass' };
-
-    ctrl.innerHTML = `
-      <p class="hint" style="font-weight:600;margin-bottom:.5rem">▸ 当轮投入（重新分配）</p>
-      <div class="initial-grid">
-        <div class="initial-cell"><label>10金币（共2枚）</label>
-          <input type="number" id="inp-d10" min="0" max="2" value="0"/></div>
-        <div class="initial-cell"><label>5金币（共4枚）</label>
-          <input type="number" id="inp-d5" min="0" max="4" value="0"/></div>
-        <div class="initial-cell"><label>1金币（共10枚）</label>
-          <input type="number" id="inp-d1" min="0" max="10" value="0"/></div>
-      </div>
-
-      <p class="hint" style="font-weight:600;margin-top:1.2rem;margin-bottom:.3rem">
-        ▸ 上轮微调 <span id="adj-label" style="color:var(--gold);font-weight:400">（不调整）</span>
-      </p>
-      <p class="hint" style="margin-bottom:.4rem;font-size:.85rem">
-        上轮投入：10×${prevBrk[10]??0}　5×${prevBrk[5]??0}　1×${prevBrk[1]??0}　共 ${prevTotal} 金币
-      </p>
-      <p class="hint" style="margin-bottom:.3rem">增加一枚：</p>
-      <div class="denom-btns" id="adj-btns">
-        ${[10,5,1].map(d => `<button class="denom-btn" data-act="add" data-d="${d}" ${(prevBrk[d]??0)>=(d===10?2:d===5?4:10)?'disabled':''}>+${d}</button>`).join('')}
-        ${[10,5,1].map(d => `<button class="denom-btn remove" data-act="remove" data-d="${d}" ${(prevBrk[d]??0)<=0?'disabled':''}>-${d}</button>`).join('')}
-        <button class="denom-btn secondary" data-act="pass">不调整</button>
-      </div>
-
-      <div class="action-btns" style="margin-top:1.2rem">
-        <button id="btn-confirm-full">确认行动</button>
-      </div>`;
-
-    $('adj-btns').querySelectorAll('[data-act]').forEach(btn => {
-      btn.onclick = () => {
-        if (btn.disabled) return;
-        $('adj-btns').querySelectorAll('[data-act]').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        const act = btn.dataset.act;
-        const d = parseInt(btn.dataset.d);
-        selectedPrevAdjust = act === 'pass' ? { type: 'pass' } : { type: act, denom: d };
-        $('adj-label').textContent = act === 'pass' ? '（不调整）' : `（${act === 'add' ? '+' : '-'}${d} 金币）`;
-      };
+    socket.emit('submit-invest', { investObj }, res => {
+      if (res?.error) alert(res.error);
     });
-
-    $('btn-confirm-full').onclick = () => {
-      const investObj = {
-        10: parseInt($('inp-d10').value) || 0,
-        5:  parseInt($('inp-d5').value)  || 0,
-        1:  parseInt($('inp-d1').value)  || 0,
-      };
-      socket.emit('submit-action', { type: 'full', investObj, prevAdjust: selectedPrevAdjust }, res => {
-        if (res?.error) alert(res.error);
-      });
-    };
-  }
+  };
 }
 
 // ── Guess Phase ───────────────────────────────────────────

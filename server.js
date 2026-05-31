@@ -96,10 +96,25 @@ io.on('connection', socket => {
     broadcast(room);
   });
 
-  socket.on('submit-action', (action, cb) => {
+  // Sub-phase 1: previous-round ±1 adjustment (or pass)
+  socket.on('submit-adjust', (action, cb) => {
     const room = rooms.get(currentRoomId);
     if (!room) { cb?.({ error: 'room not found' }); return; }
-    const result = room.submitAction(socket.id, action);
+    const result = room.submitAdjust(socket.id, action);
+    if (result.error) { cb?.({ error: result.error }); return; }
+    cb?.({ ok: true });
+    broadcast(room);
+    if (room.allAdjusted()) {
+      room.beginInvest();
+      broadcast(room);
+    }
+  });
+
+  // Sub-phase 2: current-round coin allocation
+  socket.on('submit-invest', (action, cb) => {
+    const room = rooms.get(currentRoomId);
+    if (!room) { cb?.({ error: 'room not found' }); return; }
+    const result = room.submitInvest(socket.id, action);
     if (result.error) { cb?.({ error: result.error }); return; }
     cb?.({ ok: true });
     broadcast(room);
@@ -143,10 +158,17 @@ io.on('connection', socket => {
     }
 
     // Disconnection may unblock a phase that was waiting on this player
-    if (room.phase === 'action' && room.allActed()) {
-      room.beginGuess();
-      broadcast(room);
-      if (room.phase === 'settlement') broadcast(room);
+    if (room.phase === 'action') {
+      if (room.actionSubPhase === 'adjust' && room.allAdjusted()) {
+        room.beginInvest();
+        broadcast(room);
+      } else if (room.actionSubPhase === 'invest' && room.allActed()) {
+        room.beginGuess();
+        broadcast(room);
+        if (room.phase === 'settlement') broadcast(room);
+      } else {
+        broadcast(room);
+      }
     } else if (room.phase === 'guess' && room.allGuessed()) {
       room.beginSettlement();
       broadcast(room);
