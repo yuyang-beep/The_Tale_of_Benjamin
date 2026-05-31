@@ -206,47 +206,48 @@ function renderInvest() {
   const gr = state.gameRound;
   const amBenjamin = isBenjamin();
 
-  // ── Post-adjust score reveal ──────────────────────────────
-  // Build reveal section: previous round final coins + current standings
+  // ── Post-adjust reveal ────────────────────────────────────
   let revealHtml = '';
+
+  // Part A: viewer's own adjust summary (rounds 2+)
+  if (state.myAdjust) {
+    const adj = state.myAdjust;
+    let adjText;
+    if (adj.type === 'pass') {
+      adjText = '<span style="color:#aaa">不调整</span>';
+    } else if (adj.type === 'add') {
+      adjText = `<span style="color:#7dc;font-weight:600">+1枚 ${adj.denom} 金币</span>`;
+    } else {
+      adjText = `<span style="color:#e87;font-weight:600">-1枚 ${adj.denom} 金币</span>`;
+    }
+    const pr = adj.prevRoundAfter;
+    const prTotal = pr ? [10,5,1].reduce((s,d) => s + d*(pr[d]??0), 0) : 0;
+    const prLine = pr
+      ? `<span style="color:#aaa;font-size:.82rem"> → 上轮共 ${prTotal} 金币（10×${pr[10]??0} 5×${pr[5]??0} 1×${pr[1]??0}）</span>`
+      : '';
+    revealHtml += `<div class="coin-status" style="margin-bottom:1rem">
+      <h4 style="color:var(--gold);margin-bottom:.5rem">▸ 微调结果</h4>
+      <p style="margin:.2rem 0">微调：${adjText}${prLine}</p>
+      <p style="margin:.2rem 0">当前总积分：<span style="color:var(--gold);font-size:1.1rem;font-weight:700">${adj.myTotalScore ?? 0}</span> 分</p>
+    </div>`;
+  }
+
+  // Part B: all-player standings + top-3 (rounds 3+)
   if (state.adjustReveal) {
-    // Previous round breakdown (viewer only)
-    let prevCoinLine = '';
-    if (gr > 1) {
-      const personalIdx = amBenjamin ? (5 - gr) : (gr - 1);
-      const prevIdx = amBenjamin ? personalIdx + 1 : personalIdx - 1;
-      const prevBrk = pool?.rounds?.[prevIdx] ?? { 10:0, 5:0, 1:0 };
-      const prevTotal = [10,5,1].reduce((s,d) => s + d*(prevBrk[d]??0), 0);
-      prevCoinLine = `<p class="hint" style="font-size:.85rem;margin-bottom:.5rem">
-        上轮最终投入（微调后）：10×${prevBrk[10]??0}　5×${prevBrk[5]??0}　1×${prevBrk[1]??0}　共 <span style="color:var(--gold)">${prevTotal}</span> 金币
-      </p>`;
-    }
-
-    // Score rows (visible score or '--')
-    const scoreRows = state.adjustReveal.map((e, i) => {
-      const pts = e.totalScore !== null ? `${e.totalScore} 分` : '--';
-      return `<div class="score-row${e.name === player.name ? ' you' : ''}">
+    const scoreRows = state.adjustReveal.map((e, i) => `
+      <div class="score-row${e.name === player.name ? ' you' : ''}">
         <span>${i+1}. ${e.name}${e.name === player.name ? ' (你)' : ''}</span>
-        <span class="score-pts">${pts}</span>
-      </div>`;
-    }).join('');
-
-    // Top-3 section (rounds 3+: adjustReveal has full scores)
-    let top3Html = '';
-    if (gr >= 3) {
-      const top3 = state.adjustReveal.slice(0, 3);
-      top3Html = `<div class="leaderboard" style="margin-top:.75rem">
-        <h4>▸ 当前前三名</h4>
-        ${top3.map((e, i) => `<div class="lb-row">
-          <span>${i+1}. ${e.name}</span>
-          <span>${e.totalScore !== null ? e.totalScore + ' 分' : '--'}</span>
-        </div>`).join('')}
-      </div>`;
-    }
-
-    revealHtml = `<div class="coin-status" style="margin-bottom:1rem">
-      <h4 style="color:var(--gold);margin-bottom:.6rem">▸ 微调后积分公示</h4>
-      ${prevCoinLine}
+        <span class="score-pts">${e.totalScore} 分</span>
+      </div>`).join('');
+    const top3 = state.adjustReveal.slice(0, 3);
+    const top3Html = `<div class="leaderboard" style="margin-top:.75rem">
+      <h4>▸ 当前前三名</h4>
+      ${top3.map((e, i) => `<div class="lb-row">
+        <span>${i+1}. ${e.name}</span><span>${e.totalScore} 分</span>
+      </div>`).join('')}
+    </div>`;
+    revealHtml += `<div class="coin-status" style="margin-bottom:1rem">
+      <h4 style="color:var(--gold);margin-bottom:.5rem">▸ 积分公示</h4>
       <div class="settlement-scores" style="margin:0">${scoreRows}</div>
       ${top3Html}
     </div>`;
@@ -303,22 +304,36 @@ function renderGuess() {
   const player = me();
   if (!player) return;
 
+  const gsp = state.guessSubPhase;
+  const n = state.playerCount;
+  const gr = state.gameRound;
+  const others = state.players.filter(p => p.id !== myId);
+
+  // ── Already submitted ─────────────────────────────────────
   if (player.hasGuessed) {
-    $('guess-controls').innerHTML = '<p class="hint">已提交猜测，等待其他玩家…</p>';
+    const waitMsg = (!isBenjamin() && gsp === 'benjamin')
+      ? '已提交，等待本杰明猜测排名…'
+      : '已提交猜测，等待其他玩家…';
+    $('guess-controls').innerHTML = `<p class="hint">${waitMsg}</p>`;
     return;
   }
 
-  const others = state.players.filter(p => p.id !== myId);
-
   if (!isBenjamin()) {
-    // Normal player: pick who is Benjamin
+    // ── Normal player sub-phase ───────────────────────────────
+    if (gsp !== 'normal') {
+      // Shouldn't happen (hasGuessed would be true), safety fallback
+      $('guess-controls').innerHTML = '<p class="hint">等待本杰明提交猜测…</p>';
+      return;
+    }
+    // guessedBenjaminCorrectly → server auto-sets hasGuessed; safety display
     if (player.guessedBenjaminCorrectly) {
       $('guess-controls').innerHTML = '<p style="color:var(--green)">你已成功识别本杰明！</p>';
       return;
     }
+    const bonusAmt = Math.floor(n / Math.pow(2, gr - 1));
     selectedSuspect = null;
     $('guess-controls').innerHTML = `
-      <p class="hint">猜测谁是本杰明（第${state.gameRound}轮${['','n','n/2','n/4'][state.gameRound]}分）</p>
+      <p class="hint">猜测谁是本杰明（猜对得 <span style="color:var(--gold)">${bonusAmt}</span> 分）</p>
       <div class="guess-player-list" id="suspect-list">
         ${others.map(p => `<button class="guess-player-btn" data-id="${p.id}">${p.name}</button>`).join('')}
       </div>
@@ -339,12 +354,23 @@ function renderGuess() {
       });
     };
   } else {
-    // Benjamin: rank other players
+    // ── Benjamin sub-phase ────────────────────────────────────
+    if (gsp !== 'benjamin') {
+      // Normals haven't all submitted yet; Benjamin waits
+      const doneCount = state.players.filter(p => p.id !== myId && p.hasGuessed).length;
+      const totalNormals = others.length;
+      $('guess-controls').innerHTML = `
+        <p class="hint">等待其他玩家完成猜测后，轮到你猜排名…</p>
+        <p class="hint" style="color:#aaa;font-size:.85rem">(${doneCount} / ${totalNormals} 已提交)</p>`;
+      return;
+    }
+    // All normals done — show ranking form
     rankingOrder = others.map(p => p.id);
     renderRankList();
     const ctrl = $('guess-controls');
     const submitBtn = document.createElement('div');
     submitBtn.className = 'action-btns';
+    submitBtn.style.marginTop = '1rem';
     submitBtn.innerHTML = '<button id="btn-submit-rank">提交排名猜测</button>';
     ctrl.appendChild(submitBtn);
     $('btn-submit-rank').onclick = () => {
@@ -357,7 +383,7 @@ function renderGuess() {
 
 function renderRankList() {
   const ctrl = $('guess-controls');
-  ctrl.innerHTML = `<p class="hint">拖拽排序：猜测本轮其他玩家金币排名（从高到低）</p>
+  ctrl.innerHTML = `<p class="hint">拖拽排序：猜测其他玩家当前总积分排名（从高到低，猜对每位 +1 分）</p>
     <div class="rank-list" id="rank-list">
       ${rankingOrder.map((id, i) => {
         const p = state.players.find(x => x.id === id);
