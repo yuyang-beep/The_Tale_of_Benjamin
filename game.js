@@ -147,30 +147,62 @@ function renderAction() {
       });
     };
   } else {
+    // Build previous round breakdown info for display
+    const gr = state.gameRound;
+    const amBenjamin = isBenjamin();
+    const prevPersonalIdx = amBenjamin ? (6 - gr) : (gr - 2);
+    const prevBrk = me()?.roundCoinsBreakdown?.[prevPersonalIdx] ?? { 10: 0, 5: 0, 1: 0 };
+    const prevTotal = [10, 5, 1].reduce((s, d) => s + d * (prevBrk[d] ?? 0), 0);
+
+    let selectedPrevAdjust = { type: 'pass' };
+
     ctrl.innerHTML = `
-      <p class="hint">调整投币（±1枚，或不调整）</p>
-      <p class="hint" style="margin-bottom:.5rem">增加一枚未投入金币：</p>
-      <div class="denom-btns">
-        ${[10,5,1].map(d => `<button class="denom-btn add" data-act="add" data-d="${d}">+${d}</button>`).join('')}
+      <p class="hint" style="font-weight:600;margin-bottom:.5rem">▸ 当轮投入（重新分配）</p>
+      <div class="initial-grid">
+        <div class="initial-cell"><label>10金币（共2枚）</label>
+          <input type="number" id="inp-d10" min="0" max="2" value="0"/></div>
+        <div class="initial-cell"><label>5金币（共4枚）</label>
+          <input type="number" id="inp-d5" min="0" max="4" value="0"/></div>
+        <div class="initial-cell"><label>1金币（共10枚）</label>
+          <input type="number" id="inp-d1" min="0" max="10" value="0"/></div>
       </div>
-      <p class="hint" style="margin:.75rem 0 .5rem">撤回一枚已投入金币：</p>
-      <div class="denom-btns">
-        ${[10,5,1].map(d => `<button class="denom-btn remove" data-act="remove" data-d="${d}">-${d}</button>`).join('')}
+
+      <p class="hint" style="font-weight:600;margin-top:1.2rem;margin-bottom:.3rem">
+        ▸ 上轮微调 <span id="adj-label" style="color:var(--gold);font-weight:400">（不调整）</span>
+      </p>
+      <p class="hint" style="margin-bottom:.4rem;font-size:.85rem">
+        上轮投入：10×${prevBrk[10]??0}　5×${prevBrk[5]??0}　1×${prevBrk[1]??0}　共 ${prevTotal} 金币
+      </p>
+      <p class="hint" style="margin-bottom:.3rem">增加一枚：</p>
+      <div class="denom-btns" id="adj-btns">
+        ${[10,5,1].map(d => `<button class="denom-btn" data-act="add" data-d="${d}" ${(prevBrk[d]??0)>=(d===10?2:d===5?4:10)?'disabled':''}>+${d}</button>`).join('')}
+        ${[10,5,1].map(d => `<button class="denom-btn remove" data-act="remove" data-d="${d}" ${(prevBrk[d]??0)<=0?'disabled':''}>-${d}</button>`).join('')}
+        <button class="denom-btn secondary" data-act="pass">不调整</button>
       </div>
-      <div class="action-btns" style="margin-top:1rem">
-        <button id="btn-pass-action" class="secondary">不调整（维持原样）</button>
+
+      <div class="action-btns" style="margin-top:1.2rem">
+        <button id="btn-confirm-full">确认行动</button>
       </div>`;
-    ctrl.querySelectorAll('[data-act]').forEach(btn => {
+
+    $('adj-btns').querySelectorAll('[data-act]').forEach(btn => {
       btn.onclick = () => {
-        const type = btn.dataset.act;
-        const denom = parseInt(btn.dataset.d);
-        socket.emit('submit-action', { type, denom }, res => {
-          if (res?.error) alert(res.error);
-        });
+        if (btn.disabled) return;
+        $('adj-btns').querySelectorAll('[data-act]').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        const act = btn.dataset.act;
+        const d = parseInt(btn.dataset.d);
+        selectedPrevAdjust = act === 'pass' ? { type: 'pass' } : { type: act, denom: d };
+        $('adj-label').textContent = act === 'pass' ? '（不调整）' : `（${act === 'add' ? '+' : '-'}${d} 金币）`;
       };
     });
-    $('btn-pass-action').onclick = () => {
-      socket.emit('submit-action', { type: 'pass' }, res => {
+
+    $('btn-confirm-full').onclick = () => {
+      const investObj = {
+        10: parseInt($('inp-d10').value) || 0,
+        5:  parseInt($('inp-d5').value)  || 0,
+        1:  parseInt($('inp-d1').value)  || 0,
+      };
+      socket.emit('submit-action', { type: 'full', investObj, prevAdjust: selectedPrevAdjust }, res => {
         if (res?.error) alert(res.error);
       });
     };
@@ -283,11 +315,11 @@ function renderSettlement() {
 
   const scoreRows = state.players
     .slice()
-    .sort((a, b) => b.totalScore - a.totalScore)
+    .sort((a, b) => (b.totalScore ?? -Infinity) - (a.totalScore ?? -Infinity))
     .map(p => `
-      <div class="score-row${p.id === myId ? ' you' : ''}">
-        <span>${p.name}${p.id === myId ? ' (你)' : ''}</span>
-        <span class="score-pts">${p.totalScore} 分</span>
+      <div class="score-row${p.id === myId ? ' you' : ''}${p.connected === false ? ' disconnected' : ''}">
+        <span>${p.name}${p.id === myId ? ' (你)' : ''}${p.connected === false ? ' (离线)' : ''}</span>
+        <span class="score-pts">${p.totalScore !== undefined ? p.totalScore + ' 分' : '--'}</span>
       </div>`).join('');
 
   let lbHtml = '';

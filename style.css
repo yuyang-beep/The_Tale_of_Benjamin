@@ -120,6 +120,7 @@ button {
   width: 100%;
 }
 button:hover { background: var(--gold); color: var(--bg); }
+.hidden { display: none; }
 button.hidden { display: none; }
 button.secondary { border-color: var(--border); }
 button.secondary:hover { background: var(--border); color: var(--text); }
