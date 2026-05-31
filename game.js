@@ -206,20 +206,56 @@ function renderInvest() {
   const gr = state.gameRound;
   const amBenjamin = isBenjamin();
 
-  // Show previous round's final breakdown as reference (rounds 2+)
-  let prevRef = '';
-  if (gr > 1) {
-    const personalIdx = amBenjamin ? (5 - gr) : (gr - 1);
-    const prevIdx = amBenjamin ? personalIdx + 1 : personalIdx - 1;
-    const prevBrk = pool?.rounds?.[prevIdx] ?? { 10:0, 5:0, 1:0 };
-    const prevTotal = [10,5,1].reduce((s,d) => s + d*(prevBrk[d]??0), 0);
-    prevRef = `<p class="hint" style="font-size:.85rem;margin-bottom:.6rem">
-      上轮最终投入：10×${prevBrk[10]??0}　5×${prevBrk[5]??0}　1×${prevBrk[1]??0}　共 ${prevTotal} 金币
-    </p>`;
+  // ── Post-adjust score reveal ──────────────────────────────
+  // Build reveal section: previous round final coins + current standings
+  let revealHtml = '';
+  if (state.adjustReveal) {
+    // Previous round breakdown (viewer only)
+    let prevCoinLine = '';
+    if (gr > 1) {
+      const personalIdx = amBenjamin ? (5 - gr) : (gr - 1);
+      const prevIdx = amBenjamin ? personalIdx + 1 : personalIdx - 1;
+      const prevBrk = pool?.rounds?.[prevIdx] ?? { 10:0, 5:0, 1:0 };
+      const prevTotal = [10,5,1].reduce((s,d) => s + d*(prevBrk[d]??0), 0);
+      prevCoinLine = `<p class="hint" style="font-size:.85rem;margin-bottom:.5rem">
+        上轮最终投入（微调后）：10×${prevBrk[10]??0}　5×${prevBrk[5]??0}　1×${prevBrk[1]??0}　共 <span style="color:var(--gold)">${prevTotal}</span> 金币
+      </p>`;
+    }
+
+    // Score rows (visible score or '--')
+    const scoreRows = state.adjustReveal.map((e, i) => {
+      const pts = e.totalScore !== null ? `${e.totalScore} 分` : '--';
+      return `<div class="score-row${e.name === player.name ? ' you' : ''}">
+        <span>${i+1}. ${e.name}${e.name === player.name ? ' (你)' : ''}</span>
+        <span class="score-pts">${pts}</span>
+      </div>`;
+    }).join('');
+
+    // Top-3 section (rounds 3+: adjustReveal has full scores)
+    let top3Html = '';
+    if (gr >= 3) {
+      const top3 = state.adjustReveal.slice(0, 3);
+      top3Html = `<div class="leaderboard" style="margin-top:.75rem">
+        <h4>▸ 当前前三名</h4>
+        ${top3.map((e, i) => `<div class="lb-row">
+          <span>${i+1}. ${e.name}</span>
+          <span>${e.totalScore !== null ? e.totalScore + ' 分' : '--'}</span>
+        </div>`).join('')}
+      </div>`;
+    }
+
+    revealHtml = `<div class="coin-status" style="margin-bottom:1rem">
+      <h4 style="color:var(--gold);margin-bottom:.6rem">▸ 微调后积分公示</h4>
+      ${prevCoinLine}
+      <div class="settlement-scores" style="margin:0">${scoreRows}</div>
+      ${top3Html}
+    </div>`;
   }
 
+  // ── Coin status ───────────────────────────────────────────
   const coinTitle = gr > 1 ? '可用金币（微调后）' : '可用金币';
   $('coin-status').innerHTML = `
+    ${revealHtml}
     <div class="coin-status">
       <h4>${coinTitle}</h4>
       <div class="coin-row">
@@ -233,7 +269,6 @@ function renderInvest() {
     </div>`;
 
   $('action-controls').innerHTML = `
-    ${prevRef}
     <p class="hint" style="font-weight:600;margin-bottom:.5rem">▸ 本轮投入金币</p>
     <div class="initial-grid">
       <div class="initial-cell"><label>10金币（最多 ${rem[10]} 枚）</label>
