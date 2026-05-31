@@ -119,7 +119,7 @@ io.on('connection', socket => {
     cb?.({ ok: true });
     broadcast(room);
     if (room.allActed()) {
-      room.beginGuess();
+      try { room.beginGuess(); } catch (e) { console.error('[beginGuess]', e); }
       broadcast(room);
       if (room.phase === 'settlement') broadcast(room);
     }
@@ -133,7 +133,7 @@ io.on('connection', socket => {
     cb?.({ ok: true });
     broadcast(room);
     if (room.allGuessed()) {
-      room.beginSettlement();
+      try { room.beginSettlement(); } catch (e) { console.error('[beginSettlement]', e); }
       broadcast(room);
     }
   });
@@ -170,7 +170,7 @@ io.on('connection', socket => {
         broadcast(room);
       }
     } else if (room.phase === 'guess' && room.allGuessed()) {
-      room.beginSettlement();
+      try { room.beginSettlement(); } catch (e) { console.error('[beginSettlement/dc]', e); }
       broadcast(room);
     } else {
       broadcast(room);

@@ -110,7 +110,11 @@ function renderAdjust() {
   if (player.hasAdjusted) {
     $('coin-status').innerHTML = '';
     $('action-controls').innerHTML = '';
-    $('action-wait').textContent = '已提交微调，等待其他玩家…';
+    const pending = state.players.filter(p => p.connected && !p.hasAdjusted);
+    const names = pending.map(p => p.name).join('、');
+    $('action-wait').textContent = pending.length
+      ? `等待 ${names} 完成微调…`
+      : '已提交微调，等待其他玩家…';
     show('action-wait');
     return;
   }
@@ -187,7 +191,11 @@ function renderInvest() {
   if (player.hasActed) {
     $('coin-status').innerHTML = '';
     $('action-controls').innerHTML = '';
-    $('action-wait').textContent = '已提交投入，等待其他玩家…';
+    const pending = state.players.filter(p => p.connected && !p.hasActed);
+    const names = pending.map(p => p.name).join('、');
+    $('action-wait').textContent = pending.length
+      ? `等待 ${names} 完成投入…`
+      : '已提交投入，等待其他玩家…';
     show('action-wait');
     return;
   }
@@ -380,12 +388,12 @@ function renderSettlement() {
     ${lbHtml}`;
 
   const isHost = me()?.isHost;
-  if (isHost && state.gameRound < 5) show('btn-next-round');
-  else hide('btn-next-round');
-  if (state.gameRound >= 5) {
+  const isLastRound = state.gameRound >= 5;
+  if (isHost) {
+    $('btn-next-round').textContent = isLastRound ? '结束游戏' : '下一轮';
+    show('btn-next-round');
+  } else {
     hide('btn-next-round');
-    // trigger end
-    socket.emit('next-round', {});
   }
 }
 
@@ -407,21 +415,32 @@ function renderEnded() {
   $('benjamin-reveal').textContent = benj ? `本杰明是：${benj.name}` : '';
 }
 
-// ── State update ──────────────────────────────────────────
+// ── Connection management ─────────────────────────────────
 socket.on('connect', () => {
   myId = socket.id;
-  // Auto-rejoin after page refresh or brief disconnection
-  if (!myRoomId) {
-    const saved = JSON.parse(localStorage.getItem('benjamin_session') || 'null');
-    if (saved) {
-      socket.emit('reconnect-room', { roomId: saved.roomId, name: saved.playerName }, res => {
-        if (res.ok) {
-          myRoomId = res.roomId;
-        } else {
-          localStorage.removeItem('benjamin_session');
-        }
-      });
-    }
+  // Hide reconnecting banner
+  const banner = document.getElementById('reconnect-banner');
+  if (banner) banner.classList.add('hidden');
+  // Always re-register with the server on every (re)connect.
+  // Socket ID changes after disconnect; server needs the new ID
+  // to broadcast state to this client — do NOT gate on myRoomId.
+  const saved = JSON.parse(localStorage.getItem('benjamin_session') || 'null');
+  if (saved) {
+    socket.emit('reconnect-room', { roomId: saved.roomId, name: saved.playerName }, res => {
+      if (res.ok) {
+        myRoomId = res.roomId;
+      } else {
+        myRoomId = null;
+        localStorage.removeItem('benjamin_session');
+      }
+    });
+  }
+});
+
+socket.on('disconnect', () => {
+  if (myRoomId) {
+    const banner = document.getElementById('reconnect-banner');
+    if (banner) banner.classList.remove('hidden');
   }
 });
 
