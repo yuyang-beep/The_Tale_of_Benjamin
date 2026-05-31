@@ -28,6 +28,7 @@ $('btn-create').onclick = () => {
   socket.emit('create-room', { name }, res => {
     if (res.error) { $('lobby-error').textContent = res.error; return; }
     myRoomId = res.roomId;
+    localStorage.setItem('benjamin_session', JSON.stringify({ roomId: res.roomId, playerName: name }));
     showScreen('waiting');
   });
 };
@@ -40,6 +41,7 @@ $('btn-join').onclick = () => {
   socket.emit('join-room', { roomId: code, name }, res => {
     if (res.error) { $('lobby-error').textContent = res.error; return; }
     myRoomId = res.roomId;
+    localStorage.setItem('benjamin_session', JSON.stringify({ roomId: res.roomId, playerName: name }));
     showScreen('waiting');
   });
 };
@@ -55,8 +57,8 @@ function renderWaiting() {
   $('room-code').textContent = myRoomId;
   const list = $('player-list');
   list.innerHTML = state.players.map(p =>
-    `<div class="player-item">
-      <span>${p.name}</span>
+    `<div class="player-item${p.connected === false ? ' disconnected' : ''}">
+      <span>${p.name}${p.connected === false ? ' (离线)' : ''}</span>
       ${p.isHost ? '<span class="badge">主持人</span>' : ''}
     </div>`
   ).join('');
@@ -320,6 +322,7 @@ $('btn-next-round').onclick = () => {
 // ── Ended ─────────────────────────────────────────────────
 function renderEnded() {
   showPanel('ended');
+  localStorage.removeItem('benjamin_session');
   const sorted = [...state.players].sort((a, b) => b.totalScore - a.totalScore);
   $('final-scores').innerHTML = sorted.map((p, i) =>
     `<div class="final-row">
@@ -331,7 +334,22 @@ function renderEnded() {
 }
 
 // ── State update ──────────────────────────────────────────
-socket.on('connect', () => { myId = socket.id; });
+socket.on('connect', () => {
+  myId = socket.id;
+  // Auto-rejoin after page refresh or brief disconnection
+  if (!myRoomId) {
+    const saved = JSON.parse(localStorage.getItem('benjamin_session') || 'null');
+    if (saved) {
+      socket.emit('reconnect-room', { roomId: saved.roomId, name: saved.playerName }, res => {
+        if (res.ok) {
+          myRoomId = res.roomId;
+        } else {
+          localStorage.removeItem('benjamin_session');
+        }
+      });
+    }
+  }
+});
 
 socket.on('state', newState => {
   state = newState;

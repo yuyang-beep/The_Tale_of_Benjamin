@@ -55,6 +55,28 @@ io.on('connection', socket => {
     broadcast(room);
   });
 
+  socket.on('reconnect-room', ({ roomId, name }, cb) => {
+    const id = roomId?.toUpperCase();
+    const room = rooms.get(id);
+    if (!room) { cb({ error: 'room not found' }); return; }
+
+    if (room.phase === 'waiting') {
+      // In lobby, treat as a normal join
+      const result = room.addPlayer(socket.id, name);
+      if (result.error) { cb({ error: result.error }); return; }
+      currentRoomId = id;
+      cb({ ok: true, roomId: id });
+      broadcast(room);
+      return;
+    }
+
+    const result = room.reconnectPlayer(socket.id, name);
+    if (result.error) { cb({ error: result.error }); return; }
+    currentRoomId = id;
+    cb({ ok: true, roomId: id });
+    broadcast(room);
+  });
+
   socket.on('start-game', (_, cb) => {
     const room = rooms.get(currentRoomId);
     if (!room) { cb?.({ error: 'room not found' }); return; }
@@ -114,8 +136,32 @@ io.on('connection', socket => {
     const room = rooms.get(currentRoomId);
     if (!room) return;
     room.removePlayer(socket.id);
-    if (room.players.size === 0) { rooms.delete(currentRoomId); return; }
-    broadcast(room);
+
+    if (room.phase === 'waiting' && room.players.size === 0) {
+      rooms.delete(currentRoomId);
+      return;
+    }
+
+    // Disconnection may unblock a phase that was waiting on this player
+    if (room.phase === 'action' && room.allActed()) {
+      room.beginGuess();
+      broadcast(room);
+      if (room.phase === 'settlement') broadcast(room);
+    } else if (room.phase === 'guess' && room.allGuessed()) {
+      room.beginSettlement();
+      broadcast(room);
+    } else {
+      broadcast(room);
+    }
+
+    // Clean up room after 5 min if everyone stays disconnected
+    if (room.allDisconnected) {
+      const rid = currentRoomId;
+      setTimeout(() => {
+        const r = rooms.get(rid);
+        if (r && r.allDisconnected) rooms.delete(rid);
+      }, 5 * 60 * 1000);
+    }
   });
 });
 

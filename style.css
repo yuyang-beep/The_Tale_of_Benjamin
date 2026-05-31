@@ -140,6 +140,7 @@ button.secondary:hover { background: var(--border); color: var(--text); }
   justify-content: space-between;
   align-items: center;
 }
+.player-item.disconnected { opacity: .45; }
 .player-item .badge {
   font-size: .75rem;
   color: var(--gold);
