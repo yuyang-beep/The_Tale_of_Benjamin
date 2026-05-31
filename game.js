@@ -336,8 +336,10 @@ socket.on('connect', () => { myId = socket.id; });
 socket.on('state', newState => {
   state = newState;
 
-  if (state.phase === 'lobby') {
-    showScreen('lobby');
+  if (state.phase === 'lobby' || state.phase === 'waiting') {
+    if (!myRoomId) { showScreen('lobby'); return; }
+    showScreen('waiting');
+    renderWaiting();
     return;
   }
 

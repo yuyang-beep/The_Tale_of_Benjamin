@@ -116,7 +116,7 @@ io.on('connection', socket => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT) || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`The Tale of Benjamin running at http://localhost:${PORT}`);
   console.log(`LAN access: http://<your-ip>:${PORT}`);

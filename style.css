@@ -32,6 +32,60 @@ body {
 .title { font-size: 2.4rem; text-align: center; color: var(--gold); letter-spacing: .1em; }
 .subtitle { text-align: center; color: var(--text-dim); margin-bottom: 2rem; font-size: .9rem; letter-spacing: .2em; }
 
+/* ── Lobby name field ── */
+.field-label {
+  display: block;
+  font-size: .8rem;
+  color: var(--text-dim);
+  letter-spacing: .1em;
+  margin-bottom: .4rem;
+}
+
+#screen-lobby > #inp-name {
+  width: 100%;
+  margin-bottom: 1.5rem;
+  font-size: 1.1rem;
+  padding: .85rem 1rem;
+}
+
+.lobby-actions {
+  display: flex;
+  gap: 0;
+  align-items: stretch;
+}
+
+.lobby-card {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+
+.lobby-card-title {
+  font-size: 1rem;
+  color: var(--gold);
+  letter-spacing: .05em;
+}
+
+.lobby-card-desc {
+  font-size: .8rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.lobby-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem;
+  color: var(--text-dim);
+  font-size: .85rem;
+  flex-shrink: 0;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);

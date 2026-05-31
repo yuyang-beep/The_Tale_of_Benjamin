@@ -13,13 +13,25 @@
     <div id="screen-lobby" class="screen active">
       <h1 class="title">本杰明往事</h1>
       <p class="subtitle">The Tale of Benjamin</p>
-      <div class="card">
-        <input id="inp-name" type="text" placeholder="你的名字" maxlength="12"/>
-        <button id="btn-create">创建房间</button>
-        <div class="divider">或</div>
-        <input id="inp-room" type="text" placeholder="房间码 XXXX" maxlength="4"/>
-        <button id="btn-join">加入房间</button>
+
+      <label class="field-label">你的名字</label>
+      <input id="inp-name" type="text" placeholder="输入名字后选择操作" maxlength="12" autocomplete="off"/>
+
+      <div class="lobby-actions">
+        <div class="lobby-card">
+          <p class="lobby-card-title">新建房间</p>
+          <p class="lobby-card-desc">创建一局，把房间码分享给朋友</p>
+          <button id="btn-create">创建房间</button>
+        </div>
+        <div class="lobby-divider">或</div>
+        <div class="lobby-card">
+          <p class="lobby-card-title">加入房间</p>
+          <p class="lobby-card-desc">输入朋友的房间码加入</p>
+          <input id="inp-room" type="text" placeholder="房间码 XXXX" maxlength="4" autocomplete="off"/>
+          <button id="btn-join">加入房间</button>
+        </div>
       </div>
+
       <div id="lobby-error" class="error"></div>
     </div>
 
