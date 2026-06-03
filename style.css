@@ -275,3 +275,246 @@ button.secondary:hover { background: var(--border); color: var(--text); }
 }
 .final-row:first-child { color: var(--gold); font-size: 1.1rem; }
 #benjamin-reveal { margin-top: 1rem; color: var(--text-dim); font-style: italic; }
+
+/* ════════════════════════════════════════════════════════════
+   ④ 世界观首页 — Lore / Narrative
+   ════════════════════════════════════════════════════════════ */
+
+.lore-hero {
+  text-align: center;
+  padding: 2.25rem 0 .75rem;
+}
+
+.lore-poem {
+  margin: 1.4rem auto 0;
+  line-height: 2.6;
+  color: var(--text-dim);
+  font-size: .92rem;
+  font-style: italic;
+  letter-spacing: .04em;
+  animation: lore-fadein 1.4s ease both;
+  animation-delay: .4s;
+  opacity: 0;
+}
+.lore-poem p { margin: 0; }
+
+.lore-call {
+  margin-top: 1.1rem;
+  color: var(--text);
+  font-size: .88rem;
+  letter-spacing: .1em;
+  animation: lore-fadein 1s ease both;
+  animation-delay: 1.1s;
+  opacity: 0;
+}
+
+.lore-sep {
+  text-align: center;
+  color: var(--gold-dim);
+  font-size: .78rem;
+  letter-spacing: .4em;
+  margin: 1.4rem 0 1.6rem;
+  animation: lore-fadein .8s ease both;
+  animation-delay: 1.5s;
+  opacity: 0;
+}
+
+@keyframes lore-fadein {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Lobby input animate in with the sep */
+#screen-lobby > .field-label,
+#screen-lobby > #inp-name,
+#screen-lobby > .lobby-actions,
+#screen-lobby > .error {
+  animation: lore-fadein .8s ease both;
+  animation-delay: 1.6s;
+  opacity: 0;
+}
+
+/* ════════════════════════════════════════════════════════════
+   ① 双时间轴 — Timeline Bar
+   ════════════════════════════════════════════════════════════ */
+
+#hdr-timeline { margin: .25rem 0 1rem; }
+
+.timeline-bar {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .35rem 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.tl-dir {
+  font-size: .68rem;
+  letter-spacing: .06em;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  min-width: 2.4rem;
+  text-align: center;
+}
+.tl-dir.benjamin { color: var(--gold-dim); }
+
+.tl-track {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  position: relative;
+  padding-top: 5px;
+}
+
+/* Connecting line spanning all dots */
+.tl-track::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 8%;
+  right: 8%;
+  height: 1px;
+  background: var(--border);
+  z-index: 0;
+}
+
+.tl-step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .22rem;
+}
+
+.tl-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  position: relative;
+  z-index: 1;
+  transition: all .35s ease;
+}
+
+.tl-step.done   .tl-dot { background: var(--gold-dim); border-color: var(--gold-dim); }
+.tl-step.current .tl-dot {
+  background: var(--gold); border-color: var(--gold);
+  width: 13px; height: 13px;
+  box-shadow: 0 0 9px rgba(201,168,76,.5);
+}
+.tl-step.future .tl-dot { opacity: .28; }
+
+.tl-rnum {
+  font-size: .6rem;
+  color: var(--text-dim);
+  line-height: 1;
+}
+.tl-step.done    .tl-rnum { color: var(--gold-dim); }
+.tl-step.current .tl-rnum { color: var(--gold); }
+
+/* ════════════════════════════════════════════════════════════
+   ② 命运回放 — Ended / Replay
+   ════════════════════════════════════════════════════════════ */
+
+.ended-title {
+  color: var(--gold);
+  letter-spacing: .15em;
+  font-size: 1.4rem;
+  margin-bottom: .5rem;
+}
+
+/* Updated final-row: rank · name · score */
+#final-scores { margin: 1.25rem 0 .5rem; }
+.final-row {
+  display: grid;
+  grid-template-columns: 1.6rem 1fr auto;
+  gap: .6rem;
+  align-items: center;
+  padding: .5rem .75rem;
+  border-bottom: 1px solid var(--border);
+  transition: background .2s;
+}
+.final-row:first-child { background: rgba(201,168,76,.07); }
+.final-row.you { border-left: 2px solid var(--gold-dim); padding-left: .6rem; }
+.final-rank  { color: var(--gold-dim); font-size: .78rem; text-align: center; }
+.final-name  { font-size: .95rem; }
+.final-score { color: var(--gold); text-align: right; }
+
+.replay-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.replay-title {
+  text-align: center;
+  font-size: .75rem;
+  color: var(--gold-dim);
+  letter-spacing: .35em;
+  margin-bottom: 1.25rem;
+}
+
+.replay-round { margin-bottom: .9rem; }
+
+.replay-round-hdr {
+  font-size: .7rem;
+  color: var(--gold-dim);
+  letter-spacing: .18em;
+  padding: .2rem 0 .2rem .5rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: .3rem;
+}
+
+.replay-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: .5rem;
+  align-items: center;
+  padding: .28rem .5rem;
+  font-size: .82rem;
+}
+.replay-row.you { background: rgba(201,168,76,.06); border-left: 2px solid var(--gold-dim); }
+
+.rr-b     { font-size: .66rem; color: var(--gold-dim); margin-left: .35rem; }
+.rr-coins { color: var(--text-dim); font-size: .75rem; }
+.rr-score { color: var(--gold); text-align: right; min-width: 3.5rem; font-size: .8rem; }
+
+/* ════════════════════════════════════════════════════════════
+   ⑦ 视觉系统补全
+   ════════════════════════════════════════════════════════════ */
+
+/* Waiting room — subtle tagline slot */
+#screen-waiting .room-tagline {
+  font-size: .8rem;
+  color: var(--text-dim);
+  font-style: italic;
+  letter-spacing: .06em;
+  margin: .25rem 0 .75rem;
+}
+
+/* Game header — tighten identity label */
+#hdr-identity { font-size: .8rem; }
+
+/* Settlement h3 */
+#panel-settlement h3 {
+  color: var(--gold);
+  letter-spacing: .1em;
+  margin-bottom: .75rem;
+  font-size: 1rem;
+}
+
+/* Denom button selected state */
+.denom-btn.selected {
+  background: rgba(201,168,76,.18);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* Score rows — slight hover */
+.score-row { transition: background .15s; }
+.score-row:hover { background: rgba(255,255,255,.03); }
+
+/* Leaderboard first row accent */
+.lb-row:first-of-type { background: rgba(201,168,76,.06); }

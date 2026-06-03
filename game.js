@@ -83,6 +83,34 @@ function renderHeader() {
     id.textContent = '你是普通玩家';
     id.className = 'is-normal';
   }
+  renderTimeline();
+}
+
+// ── ① 双时间轴 ────────────────────────────────────────────
+// Benjamin 逆序 R5→R4→R3→R2→R1；普通玩家顺序 R1→R2→R3→R4→R5
+function renderTimeline() {
+  const tl = $('hdr-timeline');
+  if (!tl || !state) return;
+
+  const gr = state.gameRound;
+  const amB = isBenjamin();
+
+  // Personal rounds in the order this player experiences them
+  const seq = amB ? [5, 4, 3, 2, 1] : [1, 2, 3, 4, 5];
+  const curP = amB ? (6 - gr) : gr;
+
+  const steps = seq.map(r => {
+    let cls;
+    if (amB)  cls = r > curP ? 'done' : r === curP ? 'current' : 'future';
+    else      cls = r < gr   ? 'done' : r === gr   ? 'current' : 'future';
+    return `<div class="tl-step ${cls}"><div class="tl-dot"></div><span class="tl-rnum">R${r}</span></div>`;
+  }).join('');
+
+  const dirHtml = amB
+    ? `<span class="tl-dir benjamin">逆←</span>`
+    : `<span class="tl-dir">顺→</span>`;
+
+  tl.innerHTML = `<div class="timeline-bar">${dirHtml}<div class="tl-track">${steps}</div></div>`;
 }
 
 // ── Free Phase ────────────────────────────────────────────
@@ -462,18 +490,87 @@ $('btn-next-round').onclick = () => {
   socket.emit('next-round', {}, res => { if (res?.error) alert(res.error); });
 };
 
-// ── Ended ─────────────────────────────────────────────────
+// ── ② 命运回放 + Ended ────────────────────────────────────
 function renderEnded() {
   showPanel('ended');
   localStorage.removeItem('benjamin_session');
+
   const sorted = [...state.players].sort((a, b) => b.totalScore - a.totalScore);
+  const benj   = state.players.find(p => p.isBenjamin);
+  const ROMAN  = ['Ⅰ','Ⅱ','Ⅲ','Ⅳ','Ⅴ','Ⅵ','Ⅶ','Ⅷ'];
+
+  // Final leaderboard
   $('final-scores').innerHTML = sorted.map((p, i) =>
-    `<div class="final-row">
-      <span>${i+1}. ${p.name}${p.id === myId ? ' (你)' : ''}</span>
-      <span>${p.totalScore} 分</span>
-    </div>`).join('');
-  const benj = state.players.find(p => p.isBenjamin);
-  $('benjamin-reveal').textContent = benj ? `本杰明是：${benj.name}` : '';
+    `<div class="final-row${p.id === myId ? ' you' : ''}">
+      <span class="final-rank">${ROMAN[i] ?? i+1}</span>
+      <span class="final-name">${p.name}${p.id === myId ? ' (你)' : ''}${
+        p.isBenjamin ? ' <span style="font-size:.75rem;color:var(--gold-dim)">· 本杰明</span>' : ''
+      }</span>
+      <span class="final-score">${p.totalScore} 分</span>
+    </div>`
+  ).join('');
+
+  // Benjamin reveal
+  $('benjamin-reveal').innerHTML = benj
+    ? `<span style="letter-spacing:.06em">命运逆行者——<em style="color:var(--gold);font-style:normal">${benj.name}</em></span>`
+    : '';
+
+  // Replay — remove stale then re-insert
+  $('panel-ended').querySelector('.replay-section')?.remove();
+  $('panel-ended').insertAdjacentHTML('beforeend', buildReplay(sorted));
+}
+
+function buildReplay(players) {
+  const ROMAN = ['Ⅰ','Ⅱ','Ⅲ','Ⅳ','Ⅴ'];
+  let html = `<div class="replay-section"><p class="replay-title">── 命运回放 ──</p>`;
+
+  for (let gr = 1; gr <= 5; gr++) {
+    html += `<div class="replay-round">
+      <div class="replay-round-hdr">第 ${ROMAN[gr-1]} 局</div>`;
+
+    players.forEach(p => {
+      const pIdx    = p.isBenjamin ? (5 - gr) : (gr - 1);
+      const rd      = p.pool?.rounds?.[pIdx] ?? {};
+      const rdTotal = [10,5,1].reduce((s,d) => s + d*(rd[d]??0), 0);
+      const rdScore = p.roundScores?.[gr-1] ?? '—';
+      const pRound  = p.isBenjamin ? (6 - gr) : gr;
+      const parts   = [];
+      if (rd[10] > 0) parts.push(`${rd[10]}×10`);
+      if (rd[5]  > 0) parts.push(`${rd[5]}×5`);
+      if (rd[1]  > 0) parts.push(`${rd[1]}×1`);
+      const coinsStr = parts.length ? `${rdTotal}金（${parts.join(' ')}）` : '—';
+      const scoreStr = typeof rdScore === 'number'
+        ? (rdScore >= 0 ? `+${rdScore}` : `${rdScore}`)
+        : rdScore;
+
+      html += `<div class="replay-row${p.id === myId ? ' you' : ''}">
+        <span>${p.name}${p.isBenjamin
+          ? `<span class="rr-b">B·R${pRound}</span>` : ''}</span>
+        <span class="rr-coins">${coinsStr}</span>
+        <span class="rr-score">${scoreStr}</span>
+      </div>`;
+    });
+
+    html += `</div>`;
+  }
+
+  // Bonus row
+  const withBonus = players.filter(p => (p.bonusScore ?? 0) > 0);
+  if (withBonus.length) {
+    html += `<div class="replay-round">
+      <div class="replay-round-hdr">猜测加成</div>`;
+    withBonus.forEach(p => {
+      html += `<div class="replay-row${p.id === myId ? ' you' : ''}">
+        <span>${p.name}</span>
+        <span class="rr-coins">猜测正确</span>
+        <span class="rr-score">+${p.bonusScore}</span>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += '</div>';
+  return html;
 }
 
 // ── Connection management ─────────────────────────────────
