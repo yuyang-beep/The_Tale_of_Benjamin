@@ -497,7 +497,7 @@ function renderEnded() {
 
   const sorted = [...state.players].sort((a, b) => b.totalScore - a.totalScore);
   const benj   = state.players.find(p => p.isBenjamin);
-  const ROMAN  = ['Ⅰ','Ⅱ','Ⅲ','Ⅳ','Ⅴ','Ⅵ','Ⅶ','Ⅷ'];
+  const ROMAN  = ['Ⅰ','Ⅱ','Ⅲ','Ⅳ','Ⅴ','Ⅵ','Ⅶ','Ⅷ','Ⅸ','Ⅹ','Ⅺ','Ⅻ'];
 
   // Final leaderboard
   $('final-scores').innerHTML = sorted.map((p, i) =>
