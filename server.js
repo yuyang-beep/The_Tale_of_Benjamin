@@ -169,9 +169,17 @@ io.on('connection', socket => {
       } else {
         broadcast(room);
       }
-    } else if (room.phase === 'guess' && room.allGuessed()) {
-      try { room.beginSettlement(); } catch (e) { console.error('[beginSettlement/dc]', e); }
-      broadcast(room);
+    } else if (room.phase === 'guess') {
+      // A disconnected normal player may unblock the benjamin sub-phase
+      if (room.guessSubPhase === 'normal' && room.allNormalsGuessed()) {
+        room.guessSubPhase = 'benjamin';
+      }
+      if (room.allGuessed()) {
+        try { room.beginSettlement(); } catch (e) { console.error('[beginSettlement/dc]', e); }
+        broadcast(room);
+      } else {
+        broadcast(room);
+      }
     } else {
       broadcast(room);
     }

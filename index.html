@@ -11,22 +11,34 @@
 
     <!-- ── LOBBY ── -->
     <div id="screen-lobby" class="screen active">
-      <h1 class="title">本杰明往事</h1>
-      <p class="subtitle">The Tale of Benjamin</p>
+
+      <div class="lore-hero">
+        <h1 class="title">本杰明往事</h1>
+        <p class="subtitle">The Tale of Benjamin</p>
+        <div class="lore-poem">
+          <p>当你向前走向未来时，</p>
+          <p>有人正在从未来退回过去。</p>
+          <p>你们站在同一个瞬间，</p>
+          <p>却看见完全不同的时间。</p>
+        </div>
+        <p class="lore-call">而今晚，你们在同一段时间相遇。</p>
+      </div>
+
+      <div class="lore-sep">── ✦ ──</div>
 
       <label class="field-label">你的名字</label>
-      <input id="inp-name" type="text" placeholder="输入名字后选择操作" maxlength="12" autocomplete="off"/>
+      <input id="inp-name" type="text" placeholder="在命运之网中留下你的名字" maxlength="12" autocomplete="off"/>
 
       <div class="lobby-actions">
         <div class="lobby-card">
           <p class="lobby-card-title">新建房间</p>
-          <p class="lobby-card-desc">创建一局，把房间码分享给朋友</p>
+          <p class="lobby-card-desc">创建一局，把房间码分享给同伴</p>
           <button id="btn-create">创建房间</button>
         </div>
         <div class="lobby-divider">或</div>
         <div class="lobby-card">
           <p class="lobby-card-title">加入房间</p>
-          <p class="lobby-card-desc">输入朋友的房间码加入</p>
+          <p class="lobby-card-desc">输入同伴的房间码，加入同一段命运</p>
           <input id="inp-room" type="text" placeholder="房间码 XXXX" maxlength="4" autocomplete="off"/>
           <button id="btn-join">加入房间</button>
         </div>
@@ -51,6 +63,7 @@
         <span id="hdr-phase">自由阶段</span>
         <span id="hdr-identity"></span>
       </header>
+      <div id="hdr-timeline"></div>
 
       <!-- Free phase -->
       <div id="panel-free" class="panel hidden">
@@ -81,7 +94,7 @@
 
       <!-- Ended -->
       <div id="panel-ended" class="panel hidden">
-        <h2>游戏结束</h2>
+        <h2 class="ended-title">命运落定</h2>
         <div id="final-scores"></div>
         <p id="benjamin-reveal"></p>
       </div>
