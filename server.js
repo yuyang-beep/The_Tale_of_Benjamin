@@ -16,7 +16,6 @@ app.use(express.static(path.join(__dirname)));
 const rooms = new Map(); // roomId → GameRoom
 
 function getRoomId() {
-  // 4-letter uppercase code
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   let code;
   do { code = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join(''); }
@@ -29,19 +28,24 @@ function broadcast(room) {
     const socket = io.sockets.sockets.get(id);
     if (socket) socket.emit('state', room.publicState(id));
   });
+  if (room.moderator) {
+    const modSocket = io.sockets.sockets.get(room.moderator.id);
+    if (modSocket) modSocket.emit('state', room.publicState(room.moderator.id));
+  }
 }
 
 io.on('connection', socket => {
   let currentRoomId = null;
 
+  // Room creator becomes the moderator (does not play)
   socket.on('create-room', ({ name }, cb) => {
     const roomId = getRoomId();
     const room = new GameRoom(roomId);
     rooms.set(roomId, room);
-    const result = room.addPlayer(socket.id, name);
+    const result = room.addModerator(socket.id, name);
     if (result.error) { cb({ error: result.error }); return; }
     currentRoomId = roomId;
-    cb({ ok: true, roomId });
+    cb({ ok: true, roomId, isModerator: true });
     broadcast(room);
   });
 
@@ -60,8 +64,17 @@ io.on('connection', socket => {
     const room = rooms.get(id);
     if (!room) { cb({ error: 'room not found' }); return; }
 
+    // Moderator reconnect (detected by name match + disconnected moderator)
+    if (room.moderator && !room.moderator.connected && room.moderator.name === name) {
+      const result = room.reconnectModerator(socket.id, name);
+      if (result.error) { cb({ error: result.error }); return; }
+      currentRoomId = id;
+      cb({ ok: true, roomId: id, isModerator: true });
+      broadcast(room);
+      return;
+    }
+
     if (room.phase === 'waiting') {
-      // In lobby, treat as a normal join
       const result = room.addPlayer(socket.id, name);
       if (result.error) { cb({ error: result.error }); return; }
       currentRoomId = id;
@@ -80,7 +93,7 @@ io.on('connection', socket => {
   socket.on('start-game', (_, cb) => {
     const room = rooms.get(currentRoomId);
     if (!room) { cb?.({ error: 'room not found' }); return; }
-    if (room.hostId !== socket.id) { cb?.({ error: 'only host can start' }); return; }
+    if (room.moderator?.id !== socket.id) { cb?.({ error: 'only moderator can start' }); return; }
     const result = room.startGame();
     if (result.error) { cb?.({ error: result.error }); return; }
     cb?.({ ok: true });
@@ -89,7 +102,7 @@ io.on('connection', socket => {
 
   socket.on('end-free-phase', (_, cb) => {
     const room = rooms.get(currentRoomId);
-    if (!room || room.hostId !== socket.id) { cb?.({ error: 'not allowed' }); return; }
+    if (!room || room.moderator?.id !== socket.id) { cb?.({ error: 'not allowed' }); return; }
     if (room.phase !== 'free') { cb?.({ error: 'wrong phase' }); return; }
     room.beginAction();
     cb?.({ ok: true });
@@ -140,7 +153,7 @@ io.on('connection', socket => {
 
   socket.on('next-round', (_, cb) => {
     const room = rooms.get(currentRoomId);
-    if (!room || room.hostId !== socket.id) { cb?.({ error: 'not allowed' }); return; }
+    if (!room || room.moderator?.id !== socket.id) { cb?.({ error: 'not allowed' }); return; }
     if (room.phase !== 'settlement') { cb?.({ error: 'wrong phase' }); return; }
     room.advanceRound();
     cb?.({ ok: true });
@@ -150,6 +163,22 @@ io.on('connection', socket => {
   socket.on('disconnect', () => {
     const room = rooms.get(currentRoomId);
     if (!room) return;
+
+    // Moderator disconnect → pause game
+    if (room.moderator?.id === socket.id) {
+      room.moderator.connected = false;
+      broadcast(room); // all clients receive paused:true
+      if (room.allDisconnected) {
+        const rid = currentRoomId;
+        setTimeout(() => {
+          const r = rooms.get(rid);
+          if (r && r.allDisconnected) rooms.delete(rid);
+        }, 5 * 60 * 1000);
+      }
+      return;
+    }
+
+    // Player disconnect
     room.removePlayer(socket.id);
 
     if (room.phase === 'waiting' && room.players.size === 0) {
@@ -157,7 +186,7 @@ io.on('connection', socket => {
       return;
     }
 
-    // Disconnection may unblock a phase that was waiting on this player
+    // Disconnection may unblock a phase waiting on this player
     if (room.phase === 'action') {
       if (room.actionSubPhase === 'adjust' && room.allAdjusted()) {
         room.beginInvest();
@@ -170,7 +199,6 @@ io.on('connection', socket => {
         broadcast(room);
       }
     } else if (room.phase === 'guess') {
-      // A disconnected normal player may unblock the benjamin sub-phase
       if (room.guessSubPhase === 'normal' && room.allNormalsGuessed()) {
         room.guessSubPhase = 'benjamin';
       }
@@ -184,7 +212,6 @@ io.on('connection', socket => {
       broadcast(room);
     }
 
-    // Clean up room after 5 min if everyone stays disconnected
     if (room.allDisconnected) {
       const rid = currentRoomId;
       setTimeout(() => {

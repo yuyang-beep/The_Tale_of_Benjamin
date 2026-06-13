@@ -31,7 +31,7 @@ $('btn-create').onclick = () => {
   socket.emit('create-room', { name }, res => {
     if (res.error) { $('lobby-error').textContent = res.error; return; }
     myRoomId = res.roomId;
-    localStorage.setItem('benjamin_session', JSON.stringify({ roomId: res.roomId, playerName: name }));
+    localStorage.setItem('benjamin_session', JSON.stringify({ roomId: res.roomId, playerName: name, isModerator: true }));
     showScreen('waiting');
   });
 };
@@ -44,7 +44,7 @@ $('btn-join').onclick = () => {
   socket.emit('join-room', { roomId: code, name }, res => {
     if (res.error) { $('lobby-error').textContent = res.error; return; }
     myRoomId = res.roomId;
-    localStorage.setItem('benjamin_session', JSON.stringify({ roomId: res.roomId, playerName: name }));
+    localStorage.setItem('benjamin_session', JSON.stringify({ roomId: res.roomId, playerName: name, isModerator: false }));
     showScreen('waiting');
   });
 };
@@ -58,17 +58,30 @@ $('btn-start').onclick = () => {
 
 function renderWaiting() {
   $('room-code').textContent = myRoomId;
+
+  // Moderator badge
+  const modBadge = $('moderator-badge');
+  if (state.moderator) {
+    modBadge.className = 'mod-waiting-badge';
+    modBadge.innerHTML = `<span class="mod-crown">⬡</span> 主持人：${state.moderator.name}${!state.moderator.connected ? ' <span style="color:#e87">(离线)</span>' : ''}`;
+  } else {
+    modBadge.className = 'hidden';
+  }
+
   const list = $('player-list');
   list.innerHTML = state.players.map(p =>
     `<div class="player-item${p.connected === false ? ' disconnected' : ''}">
       <span>${p.name}${p.connected === false ? ' (离线)' : ''}</span>
-      ${p.isHost ? '<span class="badge">主持人</span>' : ''}
     </div>`
   ).join('');
-  const isHost = me()?.isHost;
-  if (isHost) { show('btn-start'); $('wait-hint').textContent = ''; }
-  else hide('btn-start');
-  if (!isHost) $('wait-hint').textContent = `等待主持人开始 (${state.players.length} 人已加入)`;
+
+  if (state.isModerator) {
+    show('btn-start');
+    $('wait-hint').textContent = `${state.players.length} 名玩家已加入，至少需要 2 人`;
+  } else {
+    hide('btn-start');
+    $('wait-hint').textContent = `等待主持人开始 (${state.players.length} 人已加入)`;
+  }
 }
 
 // ── Game Header ───────────────────────────────────────────
@@ -76,7 +89,10 @@ function renderHeader() {
   $('hdr-round').textContent = `第 ${state.gameRound} 轮`;
   $('hdr-phase').textContent = phaseLabel(state.phase, state.actionSubPhase);
   const id = $('hdr-identity');
-  if (state.isBenjamin) {
+  if (state.isModerator) {
+    id.textContent = '主持人视角';
+    id.className = 'is-moderator';
+  } else if (state.isBenjamin) {
     id.textContent = `你是本杰明（本轮执行第 ${state.benjaminRound} 轮）`;
     id.className = 'is-benjamin';
   } else {
@@ -87,15 +103,22 @@ function renderHeader() {
 }
 
 // ── ① 双时间轴 ────────────────────────────────────────────
-// Benjamin 逆序 R5→R4→R3→R2→R1；普通玩家顺序 R1→R2→R3→R4→R5
 function renderTimeline() {
   const tl = $('hdr-timeline');
   if (!tl || !state) return;
 
   const gr = state.gameRound;
-  const amB = isBenjamin();
 
-  // Personal rounds in the order this player experiences them
+  if (state.isModerator) {
+    const steps = [1,2,3,4,5].map(r => {
+      const cls = r < gr ? 'done' : r === gr ? 'current' : 'future';
+      return `<div class="tl-step ${cls}"><div class="tl-dot"></div><span class="tl-rnum">R${r}</span></div>`;
+    }).join('');
+    tl.innerHTML = `<div class="timeline-bar"><span class="tl-dir mod-dir">游戏进度</span><div class="tl-track">${steps}</div></div>`;
+    return;
+  }
+
+  const amB = isBenjamin();
   const seq = amB ? [5, 4, 3, 2, 1] : [1, 2, 3, 4, 5];
   const curP = amB ? (6 - gr) : gr;
 
@@ -116,8 +139,7 @@ function renderTimeline() {
 // ── Free Phase ────────────────────────────────────────────
 function renderFree() {
   showPanel('free');
-  const isHost = me()?.isHost;
-  if (isHost) show('btn-end-free'); else hide('btn-end-free');
+  if (state.isModerator) show('btn-end-free'); else hide('btn-end-free');
 }
 $('btn-end-free').onclick = () => {
   socket.emit('end-free-phase', {}, res => { if (res?.error) alert(res.error); });
@@ -126,8 +148,27 @@ $('btn-end-free').onclick = () => {
 // ── Action Phase ──────────────────────────────────────────
 function renderAction() {
   showPanel('action');
+  if (state.isModerator) { renderModeratorActionView(); return; }
   if (state.actionSubPhase === 'adjust') renderAdjust();
   else renderInvest();
+}
+
+function renderModeratorActionView() {
+  const isAdjust = state.actionSubPhase === 'adjust';
+  const label = isAdjust ? '微调阶段' : '投入阶段';
+  const statusRows = state.players.map(p => {
+    const done = isAdjust ? p.hasAdjusted : p.hasActed;
+    const doneLabel = isAdjust ? '✓ 已微调' : '✓ 已投入';
+    return `<div class="mod-player-row${!p.connected ? ' disconnected' : ''}">
+      <span class="mod-player-name">${p.name}${p.isBenjamin ? ' <span class="mod-b-tag">B</span>' : ''}${!p.connected ? ' (离线)' : ''}</span>
+      <span class="mod-status-badge ${done ? 'done' : 'waiting'}">${done ? doneLabel : '等待中…'}</span>
+    </div>`;
+  }).join('');
+  $('coin-status').innerHTML = `
+    <div class="mod-phase-header">▸ ${label} — 等待玩家完成行动</div>
+    <div class="mod-player-status">${statusRows}</div>`;
+  $('action-controls').innerHTML = '';
+  hide('action-wait');
 }
 
 // Sub-phase 1: adjust previous round ±1
@@ -232,12 +273,9 @@ function renderInvest() {
   const pool = player.pool;
   const rem = pool?.remaining ?? { 10:2, 5:4, 1:10 };
   const gr = state.gameRound;
-  const amBenjamin = isBenjamin();
 
-  // ── Post-adjust reveal ────────────────────────────────────
   let revealHtml = '';
 
-  // Part A: viewer's own adjust summary (rounds 2+)
   if (state.myAdjust) {
     const adj = state.myAdjust;
     let adjText;
@@ -260,7 +298,6 @@ function renderInvest() {
     </div>`;
   }
 
-  // Part B: all-player standings + top-3 (rounds 3+)
   if (state.adjustReveal) {
     const scoreRows = state.adjustReveal.map((e, i) => `
       <div class="score-row${e.name === player.name ? ' you' : ''}">
@@ -281,7 +318,6 @@ function renderInvest() {
     </div>`;
   }
 
-  // ── Coin status ───────────────────────────────────────────
   const coinTitle = gr > 1 ? '可用金币（微调后）' : '可用金币';
   $('coin-status').innerHTML = `
     ${revealHtml}
@@ -329,6 +365,8 @@ let rankingOrder = [];
 
 function renderGuess() {
   showPanel('guess');
+  if (state.isModerator) { renderModeratorGuessView(); return; }
+
   const player = me();
   if (!player) return;
 
@@ -337,7 +375,6 @@ function renderGuess() {
   const gr = state.gameRound;
   const others = state.players.filter(p => p.id !== myId);
 
-  // ── Already submitted ─────────────────────────────────────
   if (player.hasGuessed) {
     const waitMsg = (!isBenjamin() && gsp === 'benjamin')
       ? '已提交，等待本杰明猜测排名…'
@@ -347,13 +384,10 @@ function renderGuess() {
   }
 
   if (!isBenjamin()) {
-    // ── Normal player sub-phase ───────────────────────────────
     if (gsp !== 'normal') {
-      // Shouldn't happen (hasGuessed would be true), safety fallback
       $('guess-controls').innerHTML = '<p class="hint">等待本杰明提交猜测…</p>';
       return;
     }
-    // guessedBenjaminCorrectly → server auto-sets hasGuessed; safety display
     if (player.guessedBenjaminCorrectly) {
       $('guess-controls').innerHTML = '<p style="color:var(--green)">你已成功识别本杰明！</p>';
       return;
@@ -382,9 +416,7 @@ function renderGuess() {
       });
     };
   } else {
-    // ── Benjamin sub-phase ────────────────────────────────────
     if (gsp !== 'benjamin') {
-      // Normals haven't all submitted yet; Benjamin waits
       const doneCount = state.players.filter(p => p.id !== myId && p.hasGuessed).length;
       const totalNormals = others.length;
       $('guess-controls').innerHTML = `
@@ -392,7 +424,6 @@ function renderGuess() {
         <p class="hint" style="color:#aaa;font-size:.85rem">(${doneCount} / ${totalNormals} 已提交)</p>`;
       return;
     }
-    // All normals done — show ranking form
     rankingOrder = others.map(p => p.id);
     renderRankList();
     const ctrl = $('guess-controls');
@@ -407,6 +438,31 @@ function renderGuess() {
       });
     };
   }
+}
+
+function renderModeratorGuessView() {
+  const gsp = state.guessSubPhase;
+  const phLabel = gsp === 'normal' ? '普通玩家猜测本杰明' : '本杰明猜测排名';
+  const statusRows = state.players.map(p => {
+    if (p.isBenjamin) {
+      const status = gsp === 'benjamin'
+        ? (p.hasGuessed ? '✓ 已猜排名' : '猜测排名中…')
+        : '等待普通玩家…';
+      return `<div class="mod-player-row">
+        <span class="mod-player-name">${p.name} <span class="mod-b-tag">B</span></span>
+        <span class="mod-status-badge ${p.hasGuessed ? 'done' : 'waiting'}">${status}</span>
+      </div>`;
+    }
+    return `<div class="mod-player-row${!p.connected ? ' disconnected' : ''}">
+      <span class="mod-player-name">${p.name}${!p.connected ? ' (离线)' : ''}</span>
+      <span class="mod-status-badge ${p.hasGuessed ? 'done' : 'waiting'}">
+        ${p.hasGuessed ? '✓ 已猜测' : '等待中…'}
+      </span>
+    </div>`;
+  }).join('');
+  $('guess-controls').innerHTML = `
+    <div class="mod-phase-header">▸ 猜测阶段 · ${phLabel}</div>
+    <div class="mod-player-status">${statusRows}</div>`;
 }
 
 function renderRankList() {
@@ -447,6 +503,8 @@ function enableDrag(list) {
 // ── Settlement ────────────────────────────────────────────
 function renderSettlement() {
   showPanel('settlement');
+  if (state.isModerator) { renderModeratorSettlement(); return; }
+
   const player = me();
   const myScores = player?.roundScores ?? [];
   const myTotal = player?.totalScore ?? 0;
@@ -476,14 +534,74 @@ function renderSettlement() {
     <p class="hint">你的积分：本轮 ${myScores[myScores.length-1] ?? 0} 分｜猜测加成 ${myBonus} 分｜总计 ${myTotal} 分</p>
     ${lbHtml}`;
 
-  const isHost = me()?.isHost;
-  const isLastRound = state.gameRound >= 5;
-  if (isHost) {
-    $('btn-next-round').textContent = isLastRound ? '结束游戏' : '下一轮';
-    show('btn-next-round');
-  } else {
-    hide('btn-next-round');
+  $('leaderboard').innerHTML = '';
+  hide('btn-next-round');
+}
+
+function renderModeratorSettlement() {
+  const log = state.moderatorRoundLog;
+  const gr = state.gameRound;
+  const isLastRound = gr >= 5;
+
+  let tableHtml = '';
+  if (log) {
+    const rows = log.playerActions.map(pa => {
+      const inv = pa.investObj ?? {};
+      const invStr = `${inv[10]??0}×10 / ${inv[5]??0}×5 / ${inv[1]??0}×1`;
+      const adj = pa.adjustAction;
+      const adjStr = !adj || adj.type === 'pass' ? '—'
+        : adj.type === 'add' ? `+${adj.denom}金`
+        : `-${adj.denom}金`;
+      const sign = pa.roundScore >= 0 ? '+' : '';
+      return `<tr class="${pa.isBenjamin ? 'is-benjamin' : ''}">
+        <td>${pa.name}${pa.isBenjamin ? ' <span class="mod-b-tag">B</span>' : ''}</td>
+        <td>${pa.investTotal} 金</td>
+        <td class="tbl-sub">${invStr}</td>
+        <td>${adjStr}</td>
+        <td class="${pa.roundScore >= 0 ? 'score-pos' : 'score-neg'}">${sign}${pa.roundScore}</td>
+        <td class="tbl-total">${pa.totalScoreAfter}</td>
+      </tr>`;
+    }).join('');
+
+    tableHtml = `<div class="mod-table-wrap">
+      <table class="settlement-table">
+        <thead><tr>
+          <th>玩家</th><th>本轮投入</th><th class="tbl-sub">分配</th>
+          <th>微调</th><th>本轮得分</th><th>总积分</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+    if (log.correctGuessers?.length > 0) {
+      const names = log.correctGuessers.map(g => g.name).join('、');
+      tableHtml += `<p class="mod-log-line correct">✓ 本轮猜中本杰明：${names}</p>`;
+    } else if (gr <= 3) {
+      tableHtml += `<p class="mod-log-line">本轮无人猜中本杰明</p>`;
+    }
+
+    if (log.benjaminGuess) {
+      const bg = log.benjaminGuess;
+      const guessNames = bg.guess.map(g => g.name).join(' → ');
+      tableHtml += `<p class="mod-log-line">本杰明排名猜测：${guessNames}（猜对 <span style="color:var(--gold)">${bg.correct}</span> 位）</p>`;
+    }
   }
+
+  let lbHtml = '';
+  if (state.leaderboard) {
+    lbHtml = `<div class="leaderboard" style="margin-top:1rem">
+      <h4>▸ 前三名公示</h4>
+      ${state.leaderboard.map((e, i) =>
+        `<div class="lb-row"><span>${i+1}. ${e.name}</span><span>${e.totalScore} 分</span></div>`
+      ).join('')}
+    </div>`;
+  }
+
+  $('settlement-info').innerHTML = tableHtml + lbHtml;
+  $('leaderboard').innerHTML = '';
+
+  $('btn-next-round').textContent = isLastRound ? '结束游戏' : '下一轮';
+  show('btn-next-round');
 }
 
 $('btn-next-round').onclick = () => {
@@ -499,7 +617,6 @@ function renderEnded() {
   const benj   = state.players.find(p => p.isBenjamin);
   const ROMAN  = ['Ⅰ','Ⅱ','Ⅲ','Ⅳ','Ⅴ','Ⅵ','Ⅶ','Ⅷ','Ⅸ','Ⅹ','Ⅺ','Ⅻ'];
 
-  // Final leaderboard
   $('final-scores').innerHTML = sorted.map((p, i) =>
     `<div class="final-row${p.id === myId ? ' you' : ''}">
       <span class="final-rank">${ROMAN[i] ?? i+1}</span>
@@ -510,12 +627,10 @@ function renderEnded() {
     </div>`
   ).join('');
 
-  // Benjamin reveal
   $('benjamin-reveal').innerHTML = benj
     ? `<span style="letter-spacing:.06em">命运逆行者——<em style="color:var(--gold);font-style:normal">${benj.name}</em></span>`
     : '';
 
-  // Replay — remove stale then re-insert
   $('panel-ended').querySelector('.replay-section')?.remove();
   $('panel-ended').insertAdjacentHTML('beforeend', buildReplay(sorted));
 }
@@ -554,7 +669,6 @@ function buildReplay(players) {
     html += `</div>`;
   }
 
-  // Bonus row
   const withBonus = players.filter(p => (p.bonusScore ?? 0) > 0);
   if (withBonus.length) {
     html += `<div class="replay-round">
@@ -576,12 +690,7 @@ function buildReplay(players) {
 // ── Connection management ─────────────────────────────────
 socket.on('connect', () => {
   myId = socket.id;
-  // Hide reconnecting banner
-  const banner = document.getElementById('reconnect-banner');
-  if (banner) banner.classList.add('hidden');
-  // Always re-register with the server on every (re)connect.
-  // Socket ID changes after disconnect; server needs the new ID
-  // to broadcast state to this client — do NOT gate on myRoomId.
+  $('reconnect-banner')?.classList.add('hidden');
   const saved = JSON.parse(localStorage.getItem('benjamin_session') || 'null');
   if (saved) {
     socket.emit('reconnect-room', { roomId: saved.roomId, name: saved.playerName }, res => {
@@ -597,23 +706,23 @@ socket.on('connect', () => {
 
 socket.on('disconnect', () => {
   if (myRoomId) {
-    const banner = document.getElementById('reconnect-banner');
-    if (banner) banner.classList.remove('hidden');
+    $('reconnect-banner')?.classList.remove('hidden');
   }
 });
 
 socket.on('state', newState => {
   state = newState;
 
+  // Pause overlay
+  const pauseEl = $('pause-overlay');
+  if (state.paused) pauseEl?.classList.remove('hidden');
+  else pauseEl?.classList.add('hidden');
+
   if (state.phase === 'lobby' || state.phase === 'waiting') {
     if (!myRoomId) { showScreen('lobby'); return; }
     showScreen('waiting');
     renderWaiting();
     return;
-  }
-
-  if (state.phase === 'free' && state.gameRound === 1 && !myRoomId) {
-    // first state after start
   }
 
   if (['free','action','guess','settlement','ended'].includes(state.phase)) {
