@@ -31,16 +31,16 @@
 
       <div class="lobby-actions">
         <div class="lobby-card">
-          <p class="lobby-card-title">新建房间</p>
-          <p class="lobby-card-desc">创建一局，把房间码分享给同伴</p>
-          <button id="btn-create">创建房间</button>
+          <p class="lobby-card-title">主持人创建房间</p>
+          <p class="lobby-card-desc">你将主持游戏、掌控节奏，不参与积分</p>
+          <button id="btn-create">创建房间（主持人）</button>
         </div>
         <div class="lobby-divider">或</div>
         <div class="lobby-card">
-          <p class="lobby-card-title">加入房间</p>
-          <p class="lobby-card-desc">输入同伴的房间码，加入同一段命运</p>
+          <p class="lobby-card-title">玩家加入房间</p>
+          <p class="lobby-card-desc">输入主持人的房间码，加入同一段命运</p>
           <input id="inp-room" type="text" placeholder="房间码 XXXX" maxlength="4" autocomplete="off"/>
-          <button id="btn-join">加入房间</button>
+          <button id="btn-join">加入房间（玩家）</button>
         </div>
       </div>
 
@@ -51,6 +51,7 @@
     <div id="screen-waiting" class="screen">
       <h2>等待开始</h2>
       <p>房间码：<span id="room-code" class="code"></span></p>
+      <div id="moderator-badge" class="hidden"></div>
       <div id="player-list" class="player-list"></div>
       <button id="btn-start" class="hidden">开始游戏</button>
       <p id="wait-hint" class="hint"></p>
@@ -107,6 +108,15 @@
     background:#7a6530;color:#fff;
     text-align:center;padding:.5rem;font-size:.9rem;z-index:999;">
     网络断开，正在重连…
+  </div>
+
+  <!-- Pause overlay (shown when moderator disconnects) -->
+  <div id="pause-overlay" class="hidden">
+    <div class="pause-content">
+      <p class="pause-icon">⏸</p>
+      <p class="pause-title">主持人已断线</p>
+      <p class="pause-hint">游戏已暂停，等待主持人重新连接…</p>
+    </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>

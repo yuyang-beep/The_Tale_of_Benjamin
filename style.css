@@ -456,6 +456,123 @@ button.secondary:hover { background: var(--border); color: var(--text); }
   margin-bottom: 1.25rem;
 }
 
+/* ── Moderator identity ─────────────────────────────────── */
+.is-moderator { color: #a0c4ff; font-size: .85rem; letter-spacing: .04em; }
+.tl-dir.mod-dir { color: #a0c4ff; }
+
+/* ── Waiting room moderator badge ───────────────────────── */
+.mod-waiting-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  background: rgba(160,196,255,.08);
+  border: 1px solid rgba(160,196,255,.2);
+  border-radius: 20px;
+  padding: .35rem .9rem;
+  font-size: .85rem;
+  color: #a0c4ff;
+  margin-bottom: .75rem;
+}
+.mod-crown { font-size: .9rem; }
+
+/* ── Moderator action/guess status panel ────────────────── */
+.mod-phase-header {
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--gold-dim);
+  letter-spacing: .04em;
+  margin-bottom: .75rem;
+}
+.mod-player-status { display: flex; flex-direction: column; gap: .4rem; }
+.mod-player-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .45rem .7rem;
+  background: var(--surface);
+  border-radius: 6px;
+  font-size: .88rem;
+}
+.mod-player-row.disconnected { opacity: .5; }
+.mod-player-name { color: var(--text); }
+.mod-status-badge {
+  font-size: .78rem;
+  padding: .2rem .55rem;
+  border-radius: 10px;
+  font-weight: 500;
+}
+.mod-status-badge.done { background: rgba(39,174,96,.18); color: #5dd; }
+.mod-status-badge.waiting { background: rgba(255,255,255,.06); color: var(--text-dim); }
+.mod-b-tag {
+  display: inline-block;
+  font-size: .7rem;
+  background: var(--gold-dim);
+  color: #000;
+  border-radius: 3px;
+  padding: 0 .3rem;
+  margin-left: .25rem;
+  vertical-align: middle;
+  font-weight: 700;
+}
+
+/* ── Moderator settlement table ─────────────────────────── */
+.mod-table-wrap { overflow-x: auto; margin-bottom: .75rem; }
+.settlement-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .83rem;
+}
+.settlement-table th {
+  background: #1a1a10;
+  color: var(--gold-dim);
+  padding: .5rem .65rem;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.settlement-table td {
+  padding: .45rem .65rem;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  vertical-align: middle;
+}
+.settlement-table tr:last-child td { border-bottom: none; }
+.settlement-table tr.is-benjamin td { background: rgba(201,168,76,.05); }
+.tbl-sub { color: var(--text-dim); font-size: .78rem; }
+.tbl-total { color: var(--gold); font-weight: 600; }
+.score-pos { color: #5dd; }
+.score-neg { color: #e87; }
+.mod-log-line {
+  font-size: .83rem;
+  color: var(--text-dim);
+  margin: .4rem 0;
+  padding: .3rem .5rem;
+  border-left: 2px solid var(--border);
+}
+.mod-log-line.correct { color: #5dd; border-left-color: #5dd; }
+
+/* ── Pause overlay ──────────────────────────────────────── */
+#pause-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 900;
+  backdrop-filter: blur(4px);
+}
+#pause-overlay.hidden { display: none; }
+.pause-content {
+  text-align: center;
+  padding: 2.5rem 3rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+.pause-icon { font-size: 2.5rem; margin-bottom: .75rem; }
+.pause-title { font-size: 1.2rem; font-weight: 600; color: var(--text); margin-bottom: .5rem; }
+.pause-hint { font-size: .9rem; color: var(--text-dim); }
+
 .replay-round { margin-bottom: .9rem; }
 
 .replay-round-hdr {
